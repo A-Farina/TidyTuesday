@@ -1,0 +1,139 @@
+---
+title: "Tramatic Brain Injuries"
+author: "Andrew Farina"
+date: "3/24/2020"
+output:
+  html_document: 
+    code_folding: hide
+---
+
+```{r setup, message = FALSE, warning = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+
+library(tidyverse)
+library(scales)
+library(stringr)
+library(tidyr)
+library(lubridate)
+library(patchwork)
+library(kableExtra)
+library(tidytext)
+
+ggplot2::theme_set(theme_light())
+
+# Function to add colored text to the document
+
+colorize <- function(x, color) {
+  if (knitr::is_latex_output()) {
+    sprintf("\\textcolor{%s}{%s}", color, x)
+  } else if (knitr::is_html_output()) {
+    sprintf("<span style='color: %s;'>%s</span>", color, 
+      x)
+  } else x
+}
+```
+
+```{r pressure, echo=FALSE, fig.cap="#tidytuesday image", fig.align = "center", out.width = '50%', echo = FALSE}
+knitr::include_graphics(here::here("img", "tidy_tuesday.png"))
+```
+
+These data are from the [#TidyTuesday](https://github.com/rfordatascience/tidytuesday) (24 March 2020) project. Tidy Tuesday is a weekly data project aimed at the R ecosystem. As this project was borne out of the R4DS Online Learning Community and the R for Data Science textbook, an emphasis was placed on understanding how to summarize and arrange data to make meaningful charts with `{ggplot2}`, `{tidyr}`, `{dplyr}`, and other tools in the `{tidyverse}` ecosystem. 
+
+The intent of Tidy Tuesday is to provide a safe and supportive forum for individuals to practice their wrangling and data visualization skills independent of drawing conclusions. While we understand that the two are related, the focus of this practice is purely on building skills with real-world data.
+
+## Tramatic Brain Injuries 
+
+The data this week comes from the [CDC](https://www.cdc.gov/traumaticbraininjury/pdf/TBI-Surveillance-Report-FINAL_508.pdf) and [Veterans Brain Injury Center](https://dvbic.dcoe.mil/dod-worldwide-numbers-tbi). Additional stats can be found at [CDC.gov](https://www.cdc.gov/traumaticbraininjury/data/index.html).
+
+This data and cleaning script are primarily from scraping tables out of a PDF. This would be a good example of trying to clean and organize tables from PDFs, using the `{pdftools}` package from `ropensci`. I have included the PDFs this data was scraped from, and there are lots of examples of potential graphs to recreate or improve upon. Try your hand at improving or otherwise learning how to use packages like `{stringr}` or `{tidyr}` to extract data from messy PDF tables.
+
+```{r pulling in these data, include = FALSE}
+tbi_age <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-03-24/tbi_age.csv') %>% filter(!age_group %in% c("Total", "0-17"))
+tbi_year <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-03-24/tbi_year.csv')
+tbi_military <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-03-24/tbi_military.csv')
+
+# Or read in with tidytuesdayR package (https://github.com/thebioengineer/tidytuesdayR)
+# PLEASE NOTE TO USE 2020 DATA YOU NEED TO USE tidytuesdayR version ? from GitHub
+
+# Either ISO-8601 date or year/week works!
+
+# Install via devtools::install_github("thebioengineer/tidytuesdayR")
+
+#tuesdata <- tidytuesdayR::tt_load('2020-03-24')
+#tuesdata <- tidytuesdayR::tt_load(2020, week = 13)
+
+#tbi_age <- tuesdata$tbi_age
+glimpse(tbi_age)
+glimpse(tbi_year)
+glimpse(tbi_military)
+
+age_levels <- c("0-4", "5-14", "15-24", "25-34", "35-44", "45-54", "55-64", "65-74", "75+")
+```
+
+```{r}
+tbi_age %>% 
+  group_by(age_group) %>% 
+  summarize(total = sum(number_est, na.rm = TRUE),
+            rate = round(mean(rate_est, na.rm = TRUE), 2)) %>% 
+  kable() %>% 
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>% 
+  scroll_box(height = "400px")
+```
+
+```{r}
+tbi_age %>% 
+  group_by(age_group) %>% 
+  summarize(rate = round(mean(rate_est, na.rm = TRUE), 2)) %>% 
+  mutate(age_group = fct_reorder(age_group, rate)) %>% 
+  ggplot(aes(age_group, rate, fill = age_group)) + 
+  geom_col(show.legend = FALSE) +
+  scale_fill_grey(start = 0.8, end = 0.3) +
+  coord_flip() + 
+  labs(title = "TBI incident rate by age", 
+       caption = "Reported in 2014",
+       x = NULL,
+       y = "TBI incident rate (per 100k)")
+```
+
+```{r}
+tbi_age %>% 
+  group_by(injury_mechanism) %>% 
+  summarize(total = sum(number_est, na.rm = TRUE),
+            rate = round(mean(rate_est, na.rm = TRUE), 2)) %>% 
+  kable() %>% 
+  kable_styling(bootstrap_options = "striped", full_width = FALSE)
+```
+
+```{r}
+tbi_age %>% 
+  group_by(age_group, injury_mechanism) %>% 
+  summarize(rate = round(mean(rate_est, na.rm = TRUE), 2)) %>% 
+  ungroup() %>% 
+  mutate(reorder_within(age_group, rate, injury_mechanism)) %>% 
+  ggplot(aes(age_group, rate, fill = injury_mechanism)) + 
+  geom_col(position = "dodge") +
+  coord_flip() + 
+  labs(title = "TBI incident rate by age", 
+       caption = "Reported in 2014",
+       x = NULL,
+       y = "TBI incident rate (per 100k)")
+```
+
+```{r}
+tbi_age %>% 
+  group_by(age_group, injury_mechanism) %>% 
+  summarize(rate = round(mean(rate_est, na.rm = TRUE), 2)) %>% 
+  ungroup() %>% 
+  mutate(age_group = fct_relevel(age_group, age_levels)) %>% 
+  ggplot(aes(age_group, rate, color = injury_mechanism)) + 
+  geom_point() +
+  geom_line(aes(group = injury_mechanism), size = 1.25) + 
+  labs(title = "Rate of injuries according to age",
+       caption = "Reported for year 2014",
+       x = "Age Range",
+       y = "TBI Rate (Log Scale)") + 
+  scale_y_log10()
+```
+
