@@ -126,14 +126,18 @@ tbi_age %>%
   group_by(age_group, injury_mechanism) %>% 
   summarize(rate = round(mean(rate_est, na.rm = TRUE), 2)) %>% 
   ungroup() %>% 
-  mutate(age_group = fct_relevel(age_group, age_levels)) %>% 
-  ggplot(aes(age_group, rate, color = injury_mechanism)) + 
+  mutate(age_group = fct_relevel(age_group, age_levels),
+         `Injury Mechanism` = injury_mechanism) %>% 
+  ggplot(aes(age_group, rate, color = `Injury Mechanism`)) + 
   geom_point() +
-  geom_line(aes(group = injury_mechanism), size = 1.25) + 
+  geom_line(aes(group = `Injury Mechanism`), size = 1.25) + 
   labs(title = "Rate of injuries according to age",
        caption = "Reported for year 2014",
        x = "Age Range",
        y = "TBI Rate (Log Scale)") + 
-  scale_y_log10()
+  scale_y_log10() + 
+  scale_color_brewer(palette = "Dark2") + 
+  guides(color = guide_legend(reverse = TRUE))
+
 ```
 
